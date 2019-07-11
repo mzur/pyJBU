@@ -23,8 +23,8 @@ source_upsampled = np.array(source_image_upsampled)
 scale = source_image.width / reference_image.width
 radius = int(args.radius)
 diameter = 2 * radius + 1
-padding = int(np.ceil(radius / scale))
 step = int(np.ceil(1 / scale))
+padding = radius * step
 sigma_spatial = float(args.sigma_spatial)
 sigma_range = float(args.sigma_range) if args.sigma_range else np.std(reference)
 
