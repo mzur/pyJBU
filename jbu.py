@@ -1,3 +1,7 @@
+'''
+USAGE: python jbu.py images/depth.jpg images/depth.jpg images/output.jpg
+'''
+
 import argparse
 from PIL import Image
 import numpy as np
