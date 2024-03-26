@@ -39,7 +39,7 @@ class JBU:
         self.kernel_spatial = np.repeat(kernel_spatial, 3).reshape(-1, 3)
 
         # Lookup table for range kernel.
-        self.lut_range = np.exp(-1.0 * np.arange(256)**2 / (2 * self.sigma_range**2))
+        self.lut_range = None
         
 
     def process_image(self):
@@ -78,6 +78,7 @@ class JBU:
         self.step = int(np.ceil(1 / self.scale))
         self.padding = self.radius * self.step
         self.sigma_range = float(self.sigma_range) if self.sigma_range else np.std(self.reference)
+        self.lut_range = np.exp(-1.0 * np.arange(256)**2 / (2 * self.sigma_range**2))
         self.source_upsampled_padded = np.pad(self.source, ((self.padding, self.padding), (self.padding, self.padding), (0, 0)), 'symmetric').astype(np.float32)
         self.reference_padded = np.pad(self.reference, ((self.padding, self.padding), (self.padding, self.padding), (0, 0)), 'symmetric').astype(np.float32)
 
@@ -110,7 +111,7 @@ if __name__ == '__main__':
     reference = cv2.imread(reference_path)
     source = cv2.imread(source_path)
 
-    jbu = JBU(radius=1, sigma_spatial=3.0, sigma_range=6.5, width=500)
+    jbu = JBU(radius=2, sigma_spatial=2.5, sigma_range=None, width=None)
     img = jbu.run(source, reference)
 
     cv2.imshow("output", img)
