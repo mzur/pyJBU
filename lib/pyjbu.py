@@ -8,9 +8,6 @@ import time
 import cv2
 import numpy as np
 
-# from process_row import process_row  # Cython version of process_row.pyx
-
-
 mplib = "multiprocessing"  # multiprocessing or joblib
 
 if mplib == "multiprocessing":  # 1.623086 seconds
@@ -109,6 +106,9 @@ class JBU:
 
         return result.astype(np.uint8)
 
+
+# # Cython alternative -> lib/process_row.pyx  
+# from process_row import process_row  # BUG
 
 def process_row(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step, rgb):
 
