@@ -1,2 +1,5 @@
+__tmp__/
 __pycache__/
+*.pyd
+
 /images/output.jpg

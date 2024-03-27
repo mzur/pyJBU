@@ -7,10 +7,13 @@ if __name__ == '__main__':
     reference_path  = "images/color.jpg"
     output_path     = "images/output.jpg"
 
-    reference = cv2.imread(reference_path)
-    source = cv2.imread(source_path)
+    use_rgb = False
 
-    jbu = JBU(radius=1, sigma_spatial=3.0, sigma_range=6.5, width=500)
+    source = cv2.imread(source_path, int(use_rgb))
+    reference = cv2.imread(reference_path, int(use_rgb))
+
+    jbu = JBU(radius=2, sigma_spatial=2.5, sigma_range=6.5, width=800, rgb=use_rgb)
+
     img = jbu.run(source, reference)
 
     cv2.imshow("output", img)
