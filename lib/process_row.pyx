@@ -1,20 +1,12 @@
 import numpy as np
 cimport numpy as np
 
-def process_row(int y, int padding, tuple ref_size, np.ndarray[np.float32_t, ndim=3] reference_padded, np.ndarray[np.float32_t, ndim=3] source_upsampled_padded, np.ndarray[np.float32_t, ndim=2] kernel_spatial, np.ndarray[np.float32_t, ndim=2] lut_range, int step, bint rgb):
-    if not rgb:
-        raise ValueError("Only RGB mode is supported")
-    
-    cdef np.ndarray[np.float64_t, ndim=2] row
-    cdef np.ndarray[np.float64_t, ndim=1] X
-    cdef np.ndarray[np.float64_t, ndim=1] I_p
-    cdef np.ndarray[np.float64_t, ndim=2] patch_reference
-    cdef np.ndarray[np.float64_t, ndim=2] patch_source_upsampled
-    cdef np.ndarray[np.float64_t, ndim=2] kernel_range
-    cdef np.ndarray[np.float64_t, ndim=2] weight
-    cdef np.ndarray[np.float64_t, ndim=1] k_p
-
-    row = np.zeros((ref_size[0], 3))
+def process_row_rgb(int y, int padding, tuple ref_size, 
+                    np.ndarray[np.float32_t, ndim=3] reference_padded, 
+                    np.ndarray[np.float32_t, ndim=3] source_upsampled_padded, 
+                    np.ndarray[np.float32_t, ndim=2] kernel_spatial,
+                    np.ndarray[np.float32_t, ndim=1] lut_range, int step):
+    cdef np.ndarray[np.float32_t, ndim=2] row = np.zeros((ref_size[0], 3), dtype=np.float32)
     y += padding
     X = np.arange(padding, reference_padded.shape[1] - padding)
     I_p = reference_padded[y, X]

@@ -50,13 +50,13 @@ class JBU:
             height = int(self.width / self.aspect_ratio)
             self.ref_size = (self.width, height)
             # Resize reference image
-            self.reference = cv2.resize(self.reference, self.ref_size, interpolation=cv2.INTER_LINEAR)
+            self.reference = cv2.resize(self.reference, self.ref_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
         else:
             # Use reference size
             self.ref_size = self.reference.shape[1::-1]  # (width, height)
 
         # Resize source image
-        self.source = cv2.resize(self.source, self.ref_size, interpolation=cv2.INTER_LINEAR)
+        self.source = cv2.resize(self.source, self.ref_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
 
         self.scale = self.src_size[0] / self.ref_size[0]  # scale: 0.4325
         self.step = int(np.ceil(1 / self.scale))          # step: 3
@@ -80,9 +80,9 @@ class JBU:
 
     def process_image(self):
         if self.rgb:
-            result = np.zeros((self.ref_size[1], self.ref_size[0], 3))
+            result = np.zeros((self.ref_size[1], self.ref_size[0], 3), dtype=np.float32)
         else:
-            result = np.zeros((self.ref_size[1], self.ref_size[0]))
+            result = np.zeros((self.ref_size[1], self.ref_size[0]), dtype=np.float32)
         
         # Cython requires fixed data types
         self.reference_padded = self.reference_padded.astype(np.float32)
@@ -91,42 +91,47 @@ class JBU:
         self.lut_range = self.lut_range.astype(np.float32)
 
         params = [(y, self.padding, self.ref_size, self.reference_padded, self.source_upsampled_padded,
-           self.kernel_spatial, self.lut_range, self.step, self.rgb) for y in range(self.ref_size[1])]
+           self.kernel_spatial, self.lut_range, self.step) for y in range(self.ref_size[1])]
         
+        process_row_func = process_row_rgb if self.rgb else process_row_gray
+
         if self.mplib == "multiprocessing":
             with multiprocessing.Pool() as pool:
-                result_rows = pool.starmap(process_row, params)
+                result_rows = pool.starmap(process_row_func, params)
 
         elif self.mplib == "joblib":
-            result_rows = Parallel(n_jobs=-1)(delayed(process_row)(*param) for param in params)
-            
-
+            result_rows = Parallel(n_jobs=-1)(delayed(process_row_func)(*param) for param in params)
+        
         for i, row in enumerate(result_rows):
             result[i] = row
 
         return result.astype(np.uint8)
 
 
-# # Cython alternative -> lib/process_row.pyx  
-# from process_row import process_row  # BUG
+## CYTHON ALTERNATIVE
+# from process_row import process_row_rgb
 
-def process_row(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step, rgb):
+def process_row_rgb(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step):
+    row = np.zeros((ref_size[0], 3))
+    y += padding
+    X = np.arange(padding, reference_padded.shape[1] - padding)
+    I_p = reference_padded[y, X]
+    patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
+    patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
 
-    if rgb:
-        row = np.zeros((ref_size[0], 3))
-        y += padding
-        X = np.arange(padding, reference_padded.shape[1] - padding)
-        I_p = reference_padded[y, X]
-        patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
-        patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
+    kernel_range = lut_range[np.abs(patch_reference - np.expand_dims(I_p, axis=1)).astype(int)]
+    weight = kernel_range * kernel_spatial
+    k_p = weight.sum(axis=1)
+    row[X - padding] = np.round(np.sum(weight * patch_source_upsampled, axis=1) / k_p)
+    return row
 
-    else:
-        row = np.zeros(ref_size[0])
-        y += padding
-        X = np.arange(padding, reference_padded.shape[1] - padding)
-        I_p = reference_padded[y, X]
-        patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
-        patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
+def process_row_gray(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step):
+    row = np.zeros(ref_size[0])
+    y += padding
+    X = np.arange(padding, reference_padded.shape[1] - padding)
+    I_p = reference_padded[y, X]
+    patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
+    patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
     
     kernel_range = lut_range[np.abs(patch_reference - np.expand_dims(I_p, axis=1)).astype(int)]
     weight = kernel_range * kernel_spatial
@@ -141,12 +146,12 @@ if __name__ == '__main__':
     reference_path  = "images/color.jpg"
     output_path     = "images/output.jpg"
 
-    use_rgb = False
+    use_rgb = True
 
     source = cv2.imread(source_path, int(use_rgb))
     reference = cv2.imread(reference_path, int(use_rgb))
 
-    jbu = JBU(radius=2, sigma_spatial=2.5, sigma_range=6.5, width=800, rgb=use_rgb, mplib=mplib)
+    jbu = JBU(radius=2, sigma_spatial=2.5, sigma_range=6.5, width=400, rgb=use_rgb, mplib=mplib)
 
     start_time = time.time()  # Start the timer
     img = jbu.run(source, reference)
