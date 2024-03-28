@@ -1,7 +1,12 @@
+'''
+USAGE: python jbu.py images/depth.jpg images/color.jpg images/output.jpg
+'''
+
 import argparse
 from PIL import Image
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import time
 
 parser = argparse.ArgumentParser(description="Perform Joint Bilateral Upsampling with a source and reference image")
 parser.add_argument("source", help="Path to the source image")
@@ -54,7 +59,12 @@ def process_row(y):
 
    return result
 
-executor = ProcessPoolExecutor()
-result = executor.map(process_row, range(reference_image.height))
-executor.shutdown(True)
-Image.fromarray(np.array(list(result)).astype(np.uint8)).save(args.output)
+if __name__ == "__main__":
+    
+    start_time = time.time()
+    with multiprocessing.Pool() as pool:
+        result = pool.map(process_row, range(reference_image.height))
+    end_time = time.time()  # End the timer
+    print(f"JBU took {round(end_time - start_time, 6)} seconds")
+
+    Image.fromarray(np.array(list(result)).astype(np.uint8)).save(args.output)
