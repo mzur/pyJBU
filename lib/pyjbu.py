@@ -2,11 +2,46 @@
 Joint Bilateral Upsampling
 paper: https://johanneskopf.de/publications/jbu/
 forked from https://github.com/mzur/pyJBU
+
+compile Cython-based process_row: python build_cython.py build_ext --inplace
 '''
 
 import time
 import cv2
 import numpy as np
+
+
+# # CYTHON ALTERNATIVE
+# from process_row import process_row_rgb, process_row_gray  # type: ignore
+
+def process_row_rgb(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step):
+    row = np.zeros((ref_size[0], 3))
+    y += padding
+    X = np.arange(padding, reference_padded.shape[1] - padding)
+    I_p = reference_padded[y, X]
+    patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
+    patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
+
+    kernel_range = lut_range[np.abs(patch_reference - np.expand_dims(I_p, axis=1)).astype(int)]
+    weight = kernel_range * kernel_spatial
+    k_p = weight.sum(axis=1)
+    row[X - padding] = np.round(np.sum(weight * patch_source_upsampled, axis=1) / k_p)
+    return row
+
+def process_row_gray(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step):
+    row = np.zeros(ref_size[0])
+    y += padding
+    X = np.arange(padding, reference_padded.shape[1] - padding)
+    I_p = reference_padded[y, X]
+    patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
+    patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
+    
+    kernel_range = lut_range[np.abs(patch_reference - np.expand_dims(I_p, axis=1)).astype(int)]
+    weight = kernel_range * kernel_spatial
+    k_p = weight.sum(axis=1)
+    row[X - padding] = np.round(np.sum(weight * patch_source_upsampled, axis=1) / k_p)
+    return row
+
 
 mplib = "multiprocessing"  # multiprocessing or joblib
 
@@ -108,45 +143,13 @@ class JBU:
         return result.astype(np.uint8)
 
 
-## CYTHON ALTERNATIVE
-# from process_row import process_row_rgb
-
-def process_row_rgb(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step):
-    row = np.zeros((ref_size[0], 3))
-    y += padding
-    X = np.arange(padding, reference_padded.shape[1] - padding)
-    I_p = reference_padded[y, X]
-    patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
-    patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1, 3) for x in X])
-
-    kernel_range = lut_range[np.abs(patch_reference - np.expand_dims(I_p, axis=1)).astype(int)]
-    weight = kernel_range * kernel_spatial
-    k_p = weight.sum(axis=1)
-    row[X - padding] = np.round(np.sum(weight * patch_source_upsampled, axis=1) / k_p)
-    return row
-
-def process_row_gray(y, padding, ref_size, reference_padded, source_upsampled_padded, kernel_spatial, lut_range, step):
-    row = np.zeros(ref_size[0])
-    y += padding
-    X = np.arange(padding, reference_padded.shape[1] - padding)
-    I_p = reference_padded[y, X]
-    patch_reference = np.array([np.ascontiguousarray(reference_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
-    patch_source_upsampled = np.array([np.ascontiguousarray(source_upsampled_padded[y - padding:y + padding + 1:step, x - padding:x + padding + 1:step]).reshape(-1) for x in X])
-    
-    kernel_range = lut_range[np.abs(patch_reference - np.expand_dims(I_p, axis=1)).astype(int)]
-    weight = kernel_range * kernel_spatial
-    k_p = weight.sum(axis=1)
-    row[X - padding] = np.round(np.sum(weight * patch_source_upsampled, axis=1) / k_p)
-    return row
-
-
 if __name__ == '__main__':
 
     source_path     = "images/depth.jpg"
     reference_path  = "images/color.jpg"
     output_path     = "images/output.jpg"
 
-    use_rgb = True
+    use_rgb = False
 
     source = cv2.imread(source_path, int(use_rgb))
     reference = cv2.imread(reference_path, int(use_rgb))
